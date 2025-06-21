@@ -481,7 +481,7 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
   
   Cada componente agora sabe como se validar.
   
-  Java
+  ```java
   
   // ComponenteFinanceiro.java (evoluído)
   public class ComponenteFinanceiro {
@@ -504,7 +504,7 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
   
   A parcela é responsável por orquestrar a validação de todos os seus componentes e agregar os erros.
   
-  Java
+  ```java
   
   // Parcela.java (evoluído)
   public abstract class Parcela {
@@ -529,7 +529,7 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
   3. Orquestração Final na Carteira
   A Carteira agora usa este mecanismo para proteger a operação de amortização. O método receberPagamento se torna um exemplo claro de "Railway-Oriented Programming".
   
-  Java
+  ```java
   
   // Carteira.java (método receberPagamento final)
   public class Carteira {
@@ -594,7 +594,7 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
   1. A Abstração Central: RegraDeValidacao
   Esta classe encapsula uma única regra de negócio: a condição a ser testada e o erro a ser retornado em caso de falha.
   
-  Java
+  ```java
   
   // RegraDeValidacao.java
   import java.util.Optional;
@@ -615,10 +615,12 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
           return Optional.empty();
       }
   }
+
+  
   2. O Motor de Validação: A Classe Validador
   Esta classe genérica será nosso motor. Ela recebe uma lista de RegraDeValidacao e as aplica a um objeto, coletando todas as falhas.
   
-  Java
+ ```java
   
   // Validador.java
   import java.util.List;
@@ -744,8 +746,7 @@ Faremos com que a operação de amortização retorne um objeto de valor imutáv
 1. Os Objetos de Valor do Memorial (Os Dados)
 Primeiro, definimos as estruturas de dados que irão compor nosso memorial. São objetos imutáveis, perfeitos para DTOs ou Value Objects.
 
-Java
-````
+```java
 // DetalheAplicacaoComponente.java
 import java.math.BigDecimal;
 
@@ -792,7 +793,7 @@ public interface IAmortizacaoStrategy {
 }
 Agora, a implementação da estratégia se torna responsável por construir este relatório.
 
-Java
+```java
 
 // JurosPrimeiroStrategy.java (implementação modificada)
 public class JurosPrimeiroStrategy implements IAmortizacaoStrategy {
@@ -840,7 +841,7 @@ public class JurosPrimeiroStrategy implements IAmortizacaoStrategy {
 3. Propagando o Memorial pela Pilha de Chamadas
 As classes de domínio agora simplesmente repassam o memorial para o chamador.
 
-Java
+```java
 
 // Parcela.java (método aplicarPagamento modificado)
 public abstract class Parcela {
@@ -858,7 +859,7 @@ public abstract class Parcela {
 4. O Resultado Final na Carteira (A Combinação Perfeita)
 A Carteira agora tem um método receberPagamento que retorna o resultado final da operação: ou uma lista de erros de validação, ou o memorial de sucesso. O nosso objeto Resultado brilha aqui.
 
-Java
+```java
 
 // Carteira.java (método receberPagamento modificado)
 public class Carteira {
@@ -878,7 +879,7 @@ public class Carteira {
 }
 Como o Serviço de Aplicação usaria isso:
 
-Java
+```java
 
 // Exemplo no Application Service
 Carteira minhaCarteira = //...

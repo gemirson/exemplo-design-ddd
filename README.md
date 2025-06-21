@@ -15,14 +15,12 @@ Uma abordagem ingênua nos levaria a poluir nossas classes com condicionais (if/
 O Design Proposto: Herança e Polimorfismo
 A estratégia central é tratar Parcela como um conceito abstrato. Uma Carteira conterá uma lista de Parcelas, mas não precisará saber o tipo concreto de cada uma. Ela simplesmente confiará que cada parcela sabe como se comportar (neste caso, como calcular seu próprio valor atualizado).
 
-1. A Entidade Abstrata: Parcela
+### 1. A Entidade Abstrata: Parcela
 Criaremos uma classe abstract que define o contrato comum a todas as parcelas.
 
 Atributos Comuns: Toda parcela tem um número, uma data de vencimento e um status.
 Comportamento Abstrato: O comportamento que varia é o cálculo do valor. Definiremos um método abstract getValorAtualizado().
 <!-- end list -->
-
-Java
 
 // Parcela.java
 import java.math.BigDecimal;
@@ -57,7 +55,8 @@ public abstract class Parcela {
 }
 
 enum StatusParcela { ABERTA, PAGA, VENCIDA; }
-2. As Implementações Concretas
+
+### 2. As Implementações Concretas
 Agora, criamos as subclasses. Cada uma contém apenas os atributos e a lógica relevantes para seu contexto.
 
 a) ParcelaPreFixada
@@ -122,7 +121,7 @@ enum IndiceCorrecao { CDI, IPCA; }
 interface ServicoIndiceEconomico {
     BigDecimal buscarFator(IndiceCorrecao indice, LocalDate data);
 }
-3. A Raiz do Agregado: Carteira
+### 3. A Raiz do Agregado: Carteira
 A Carteira é a nossa Raiz de Agregado. Ela gerencia o ciclo de vida de suas parcelas e expõe os comportamentos de negócio. Notem como ela opera sobre a abstração Parcela, em vez das implementações concretas.
 
 Java

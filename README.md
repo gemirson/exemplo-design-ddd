@@ -855,7 +855,7 @@ public abstract class Parcela {
         return memorial; // Retorna o memorial para o chamador
     }
     // ...
-}
+} ```
 4. O Resultado Final na Carteira (A Combinação Perfeita)
 A Carteira agora tem um método receberPagamento que retorna o resultado final da operação: ou uma lista de erros de validação, ou o memorial de sucesso. O nosso objeto Resultado brilha aqui.
 
@@ -876,7 +876,7 @@ public class Carteira {
         return parcelaAlvo.validarParaAmortizacao()
             .map(parcelaValida -> parcelaValida.aplicarPagamento(valorPago, this.estrategiaDeAmortizacao));
     }
-}
+} ```
 Como o Serviço de Aplicação usaria isso:
 
 ```java

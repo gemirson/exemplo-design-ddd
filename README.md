@@ -1026,3 +1026,174 @@ Se sim, invoca sua IRecalculoDeCronogramaStrategy injetada, passando os dados ne
 Recebe da estratégia uma nova lista de parcelas futuras.
 Como guardiã do estado, ela substitui as antigas parcelas futuras pelas novas, garantindo a consistência do agregado.
 Este design separa as responsabilidades de forma limpa e nos dá total flexibilidade para estender o sistema com novos modelos de cálculo financeiro sem nunca modificar a classe Carteira, cumprindo com excelência o Princípio Aberto/Fechado.
+
+### Lidando com Efeitos Colaterais no Agregado (Recálculo de Cronograma)
+
+Problema: Uma amortização parcial ou antecipada em uma parcela exige o recálculo de juros e principal de todas as parcelas futuras, seguindo um modelo financeiro específico (ex: Curva Price). Esta é uma regra de negócio que afeta todo o agregado.
+
+Solução: A Carteira, como Raiz do Agregado, orquestra essa operação. A lógica complexa do algoritmo de recálculo é delegada a uma nova abstração, a IRecalculoDeCronogramaStrategy, que é injetada na Carteira. Isso respeita o OCP e o SRP.
+
+## 1. A Nova Abstração: Estratégia de Recálculo
+
+Definimos a interface para qualquer algoritmo de recálculo de cronograma.
+
+```java
+
+    // IRecalculoDeCronogramaStrategy.java
+    import java.math.BigDecimal;
+    import java.util.List;
+    
+    /**
+     * Interface para estratégias que recalculam um cronograma de parcelas
+     * após uma amortização extraordinária de principal.
+     */
+    public interface IRecalculoDeCronogramaStrategy {
+    
+        /**
+         * Recalcula o cronograma financeiro.
+         *
+         * @param parcelasAtuais A lista completa de parcelas antes do recálculo.
+         * @param numeroParcelaAmortizada O número da parcela que recebeu o pagamento extra.
+         * @param saldoPrincipalRemanescente O saldo de principal total da dívida APÓS a amortização extra.
+         * @param taxaDeJurosMensal A taxa de juros do contrato.
+         * @return Uma nova lista de parcelas representando o cronograma futuro recalculado.
+         */
+        List<Parcela> recalcular(
+            List<Parcela> parcelasAtuais,
+            int numeroParcelaAmortizada,
+            BigDecimal saldoPrincipalRemanescente,
+            BigDecimal taxaDeJurosMensal
+        );
+    }
+```
+## 2. Implementação Concreta: A Lógica da Curva Price
+
+A lógica matemática da Curva Price é encapsulada em sua própria classe.
+
+```java
+
+    // PriceRecalculoStrategy.java
+    public class PriceRecalculoStrategy implements IRecalculoDeCronogramaStrategy {
+        @Override
+        public List<Parcela> recalcular(List<Parcela> parcelasAtuais, int numeroParcelaAmortizada, BigDecimal saldoPrincipalRemanescente, BigDecimal taxaDeJurosMensal) {
+            System.out.println("LOG: Recalculando cronograma futuro usando a Curva Price...");
+            List<Parcela> novoCronogramaFuturo = new ArrayList<>();
+    
+            // 1. Filtrar as parcelas que precisam ser recalculadas (as futuras)
+            List<Parcela> parcelasFuturas = parcelasAtuais.stream()
+                .filter(p -> p.getNumero() > numeroParcelaAmortizada && p.getStatus() == StatusParcela.ABERTA)
+                .collect(Collectors.toList());
+    
+            int numeroDeParcelasRestantes = parcelasFuturas.size();
+            if (numeroDeParcelasRestantes == 0) {
+                return List.of(); // Nenhuma parcela futura para recalcular
+            }
+    
+            // 2. Lógica da Tabela Price: Calcular o novo valor da parcela (PMT)
+            // Fórmula: PMT = PV * [i(1+i)^n] / [(1+i)^n - 1]
+            BigDecimal i = taxaDeJurosMensal;
+            BigDecimal umMaisI = BigDecimal.ONE.add(i);
+            BigDecimal umMaisIelevadoAN = umMaisI.pow(numeroDeParcelasRestantes, MathContext.DECIMAL128);
+    
+            BigDecimal novoValorParcela = saldoPrincipalRemanescente
+                .multiply(i.multiply(umMaisIelevadoAN))
+                .divide(umMaisIelevadoAN.subtract(BigDecimal.ONE), 2, RoundingMode.HALF_UP);
+    
+            // 3. Gerar as novas parcelas futuras com base no novo PMT
+            BigDecimal saldoDevedorAtual = saldoPrincipalRemanescente;
+            for (int j = 0; j < numeroDeParcelasRestantes; j++) {
+                Parcela parcelaOriginalFutura = parcelasFuturas.get(j);
+                
+                BigDecimal jurosDaParcela = saldoDevedorAtual.multiply(i).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal principalDaParcela = novoValorParcela.subtract(jurosDaParcela);
+    
+                List<ComponenteFinanceiro> novosComponentes = List.of(
+                    new ComponenteFinanceiro(TipoComponente.PRINCIPAL, principalDaParcela),
+                    new ComponenteFinanceiro(TipoComponente.JUROS, jurosDaParcela)
+                );
+                
+                // Cria uma nova instância de Parcela (ex: ParcelaPreFixada)
+                // Assumindo que a classe Parcela tenha um construtor que aceite a lista de componentes
+                Parcela novaParcela = new ParcelaPreFixada(parcelaOriginalFutura.getNumero(), parcelaOriginalFutura.getDataVencimento(), novosComponentes);
+                novoCronogramaFuturo.add(novaParcela);
+    
+                saldoDevedorAtual = saldoDevedorAtual.subtract(principalDaParcela);
+            }
+    
+            System.out.println("LOG: Cronograma recalculado. Novo valor da parcela: " + novoValorParcela);
+            return novoCronogramaFuturo;
+        }
+    }
+```
+## 3. Orquestração na Carteira (Raiz do Agregado)
+
+
+ A Carteira agora é configurada com a estratégia de recálculo e usa um novo método para amortizações antecipadas, que lida com o efeito cascata.
+
+```java
+
+    // Carteira.java (evoluída)
+    public class Carteira {
+        // ...
+        private final IAmortizacaoStrategy estrategiaDeAmortizacao;
+        private final IRecalculoDeCronogramaStrategy estrategiaDeRecalculo; // NOVA ESTRATÉGIA
+        private final BigDecimal taxaDeJurosContrato;
+    
+        public Carteira(IAmortizacaoStrategy amortizacaoStrategy, IRecalculoDeCronogramaStrategy recalculoStrategy, BigDecimal taxaJuros) {
+            //...
+            this.estrategiaDeAmortizacao = amortizacaoStrategy;
+            this.estrategiaDeRecalculo = recalculoStrategy;
+            this.taxaDeJurosContrato = taxaJuros;
+        }
+    
+        // Método novo e mais explícito para esta operação complexa
+        public Resultado<MemorialDeAmortizacao, List<ErroDeValidacao>> amortizarAntecipadamente(int numeroParcela, BigDecimal valorPago) {
+            // 1. Validação (reutilizando nosso framework)
+            Parcela parcelaAlvo = //... busca a parcela
+            Resultado<Parcela, List<ErroDeValidacao>> resultadoValidacao = parcelaAlvo.validarParaAmortizacao();
+    
+            if(resultadoValidacao.isErro()) {
+                return Resultado.erro(resultadoValidacao.getErro().get());
+            }
+    
+            // 2. Aplica o pagamento na parcela alvo
+            MemorialDeAmortizacao memorialPagamento = parcelaAlvo.aplicarPagamento(valorPago, this.estrategiaDeAmortizacao);
+    
+            // 3. Verifica quanto do principal foi amortizado para decidir se recalcula
+            BigDecimal principalAmortizado = memorialPagamento.detalhesPorComponente().stream()
+                    .filter(d -> d.tipo() == TipoComponente.PRINCIPAL)
+                    .map(DetalheAplicacaoComponente::valorAplicado)
+                    .findFirst().orElse(BigDecimal.ZERO);
+    
+            // 4. Se houve amortização de principal, dispara o recálculo
+            if(principalAmortizado.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal saldoPrincipalTotalRemanescente = this.parcelas.stream()
+                        .flatMap(p -> p.getComponentes().stream())
+                        .filter(c -> c.getTipo() == TipoComponente.PRINCIPAL)
+                        .map(ComponenteFinanceiro::getSaldoDevedor)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    
+                List<Parcela> novoCronogramaFuturo = this.estrategiaDeRecalculo.recalcular(
+                        this.parcelas,
+                        numeroParcela,
+                        saldoPrincipalTotalRemanescente,
+                        this.taxaDeJurosContrato
+                );
+    
+                // 5. Atualiza o estado do agregado (substitui as parcelas futuras)
+                this.substituirParcelasFuturas(numeroParcela, novoCronogramaFuturo);
+            }
+    
+            return Resultado.sucesso(memorialPagamento);
+        }
+        
+        private void substituirParcelasFuturas(int aPartirDeNumeroParcela, List<Parcela> novoCronogramaFuturo) {
+            // Lógica para remover as parcelas antigas com número > aPartirDeNumeroParcela
+            // e adicionar as novas parcelas do novoCronogramaFuturo.
+            // ESSA MODIFICAÇÃO DE ESTADO SÓ PODE SER FEITA PELA RAIZ DO AGREGADO.
+            this.parcelas.removeIf(p -> p.getNumero() > aPartirDeNumeroParcela);
+            this.parcelas.addAll(novoCronogramaFuturo);
+            this.parcelas.sort(Comparator.comparingInt(Parcela::getNumero));
+        }
+    }
+```

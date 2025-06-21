@@ -972,3 +972,57 @@ Conclusão
 Este design final alcança todos os nossos objetivos. A responsabilidade de criar o memorial está precisamente onde deveria estar: na Strategy. Nossas entidades de domínio (Parcela, Carteira) permanecem limpas, focadas em suas responsabilidades principais. O fluxo de dados é explícito, imutável e seguro.
 
 O resultado é um sistema que não apenas funciona corretamente, mas também conta a história de como ele funciona, garantindo a rastreabilidade e a confiança que são indispensáveis em nosso domínio de negócio.   
+
+## Assunto: Análise de Design: Amortização Antecipada e o Efeito Cascata no Agregado
+
+Para: Time de Desenvolvimento
+De: Engenheiro Linus
+Data: 21 de junho de 2025
+
+Colegas,
+
+A nova exigência de que uma amortização antecipada recalcule todo o cronograma futuro segundo a Curva Price nos apresenta um desafio de design de ordem superior. O padrão de interação dentro do nosso domínio muda fundamentalmente. Devemos analisar este cenário com extremo cuidado para não comprometer a integridade do modelo que construímos.
+
+Análise do Cenário: O Efeito Cascata e o Especialista da Informação
+Até agora, nossas operações (pagar uma parcela) eram locais. A ação de pagar a Parcela N afetava apenas o estado da Parcela N. O restante do agregado permanecia inalterado.
+
+O novo requisito introduz um efeito cascata (ripple effect). Uma ação na Parcela N (amortizar o principal) agora dispara uma alteração em cadeia nas Parcela N+1, Parcela N+2, e assim por diante. A integridade do cronograma como um todo precisa ser recalculada e mantida.
+
+A pergunta central de design que devemos responder é: Qual objeto é o especialista da informação e do comportamento para governar esta operação complexa?
+
+Vamos avaliar os candidatos:
+
+## 1. A Entidade Parcela?
+Análise: Poderíamos dar à Parcela um método amortizarPrincipalAntecipadamente que, de alguma forma, acessasse e modificasse suas parcelas "irmãs"?
+Veredito: Inaceitável. Este seria um erro grave de design. Uma entidade Parcela não deve ter conhecimento sobre a coleção à qual pertence. Forçar essa consciência criaria um acoplamento cíclico e altíssimo entre as entidades, tornando o modelo frágil e impossível de raciocinar sobre. A Parcela é especialista em seu próprio estado, não no estado do contrato inteiro.
+
+## 2. A IAmortizacaoStrategy?
+Análise: A estratégia de amortização já lida com o pagamento. Poderíamos expandi-la para também recalcular o resto do cronograma?
+Veredito: Incorreto. Isso violaria grosseiramente o Princípio da Responsabilidade Única (SRP). A responsabilidade da IAmortizacaoStrategy é clara e focada: aplicar um valor pago aos componentes internos de uma única parcela. A responsabilidade de recalcular um cronograma financeiro inteiro é um domínio de negócio completamente distinto. Misturá-los tornaria a estratégia inflada, complexa e com duas razões para mudar.
+
+## 3. A Carteira (Raiz do Agregado)?
+
+Análise: A Carteira é a Raiz do nosso Agregado. Por definição em DDD, a raiz é a única que pode ser referenciada diretamente de fora do agregado e é responsável por manter a consistência e as invariantes de todos os objetos dentro de seus limites. A lista de parcelas é o coração do estado da Carteira.
+Veredito: Correto. A Carteira é a orquestradora. Ela é o único objeto que possui a visão completa do cronograma e a autoridade para realizar uma mudança em massa em seus objetos filhos (as Parcelas) para garantir a consistência do todo. A Carteira sabe quando um recálculo é necessário.
+O Refinamento do Design: Orquestração vs. Algoritmo
+Identificamos a Carteira como a orquestradora. Agora, a segunda pergunta: devemos colocar a lógica matemática complexa da Curva Price dentro da classe Carteira?
+
+A resposta é não. Fazer isso tornaria a Carteira uma classe massiva, misturando a responsabilidade de orquestração de estado com a de cálculo financeiro algorítmico.
+
+Para manter a coesão e, crucialmente, aderir ao Princípio Aberto/Fechado (OCP), vamos delegar o "como fazer" o cálculo para uma nova abstração:
+
+Criação de um novo Papel: Definiremos um novo conceito no nosso domínio: Estratégia de Recálculo de Cronograma (IRecalculoDeCronogramaStrategy). Este será um Serviço de Domínio (stateless) ou uma Estratégia.
+Implementações Concretas: A lógica específica da Curva Price será encapsulada em uma classe PriceRecalculoStrategy. Se no futuro precisarmos do método SAC, criaremos uma SacRecalculoStrategy.
+Injeção de Dependência: A Carteira será configurada no momento de sua criação com a estratégia de recálculo apropriada para aquele tipo de contrato.
+Conclusão da Análise
+O design final para este requisito complexo é o seguinte:
+
+Um cliente (Serviço de Aplicação) chama um novo método na Carteira, por exemplo, amortizarAntecipadamente().
+A Carteira, como orquestradora, executa os seguintes passos:
+Valida a operação.
+Invoca a IAmortizacaoStrategy para aplicar o pagamento à parcela-alvo.
+Analisa o resultado (o Memorial) para ver se o principal foi amortizado.
+Se sim, invoca sua IRecalculoDeCronogramaStrategy injetada, passando os dados necessários (saldo devedor remanescente, taxa, etc.).
+Recebe da estratégia uma nova lista de parcelas futuras.
+Como guardiã do estado, ela substitui as antigas parcelas futuras pelas novas, garantindo a consistência do agregado.
+Este design separa as responsabilidades de forma limpa e nos dá total flexibilidade para estender o sistema com novos modelos de cálculo financeiro sem nunca modificar a classe Carteira, cumprindo com excelência o Princípio Aberto/Fechado.

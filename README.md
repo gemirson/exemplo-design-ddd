@@ -22,6 +22,8 @@ Atributos Comuns: Toda parcela tem um número, uma data de vencimento e um statu
 Comportamento Abstrato: O comportamento que varia é o cálculo do valor. Definiremos um método abstract getValorAtualizado().
 <!-- end list -->
 
+```java
+
 // Parcela.java
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -56,14 +58,16 @@ public abstract class Parcela {
 
 enum StatusParcela { ABERTA, PAGA, VENCIDA; }
 
+```
+
 ### 2. As Implementações Concretas
 Agora, criamos as subclasses. Cada uma contém apenas os atributos e a lógica relevantes para seu contexto.
 
-a) ParcelaPreFixada
+#### a) ParcelaPreFixada
 
 Possui um valor fixo, definido no momento do contrato.
 
-Java
+```java
 
 // ParcelaPreFixada.java
 import java.math.BigDecimal;
@@ -84,102 +88,110 @@ public class ParcelaPreFixada extends Parcela {
         return this.valorFixo;
     }
 }
-b) ParcelaPosFixada
+```
+
+##### b) ParcelaPosFixada
 
 Seu valor depende de um índice econômico e é calculado "a posteriori".
 
-Java
+```java
 
-// ParcelaPosFixada.java
-import java.math.BigDecimal;
-import java.time.LocalDate;
+    // ParcelaPosFixada.java
+    import java.math.BigDecimal;
+    import java.time.LocalDate;
 
-public class ParcelaPosFixada extends Parcela {
-    private final BigDecimal valorBase; // Atributos específicos!
-    private final IndiceCorrecao indice;
-    
-    // Simulação de um serviço externo que busca o valor do índice
-    private final ServicoIndiceEconomico servicoIndice;
+    public class ParcelaPosFixada extends Parcela {
+        private final BigDecimal valorBase; // Atributos específicos!
+        private final IndiceCorrecao indice;
+        
+        // Simulação de um serviço externo que busca o valor do índice
+        private final ServicoIndiceEconomico servicoIndice;
 
-    public ParcelaPosFixada(int numero, LocalDate dataVencimento, BigDecimal valorBase, IndiceCorrecao indice, ServicoIndiceEconomico servicoIndice) {
-        super(numero, dataVencimento);
-        this.valorBase = valorBase;
-        this.indice = indice;
-        this.servicoIndice = servicoIndice;
+        public ParcelaPosFixada(int numero, LocalDate dataVencimento, BigDecimal valorBase, IndiceCorrecao indice, ServicoIndiceEconomico servicoIndice) {
+            super(numero, dataVencimento);
+            this.valorBase = valorBase;
+            this.indice = indice;
+            this.servicoIndice = servicoIndice;
+        }
+
+        @Override
+        public BigDecimal getValorAtualizado(LocalDate dataCalculo) {
+            // Lógica de cálculo específica para pós-fixado.
+            BigDecimal fatorCorrecao = servicoIndice.buscarFator(this.indice, dataVencimento);
+            return this.valorBase.multiply(fatorCorrecao);
+        }
     }
 
-    @Override
-    public BigDecimal getValorAtualizado(LocalDate dataCalculo) {
-        // Lógica de cálculo específica para pós-fixado.
-        BigDecimal fatorCorrecao = servicoIndice.buscarFator(this.indice, dataVencimento);
-        return this.valorBase.multiply(fatorCorrecao);
+    // Classes de suporte para o exemplo
+    enum IndiceCorrecao { CDI, IPCA; }
+    interface ServicoIndiceEconomico {
+        BigDecimal buscarFator(IndiceCorrecao indice, LocalDate data);
     }
-}
 
-// Classes de suporte para o exemplo
-enum IndiceCorrecao { CDI, IPCA; }
-interface ServicoIndiceEconomico {
-    BigDecimal buscarFator(IndiceCorrecao indice, LocalDate data);
-}
+```
 ### 3. A Raiz do Agregado: Carteira
+
 A Carteira é a nossa Raiz de Agregado. Ela gerencia o ciclo de vida de suas parcelas e expõe os comportamentos de negócio. Notem como ela opera sobre a abstração Parcela, em vez das implementações concretas.
 
-Java
+```java
 
-// Carteira.java
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
+    // Carteira.java
+    import java.math.BigDecimal;
+    import java.time.LocalDate;
+    import java.util.ArrayList;
+    import java.util.List;
+    import java.util.stream.Collectors;
 
-public class Carteira {
-    private final Guid id;
-    private final List<Parcela> parcelas;
+    public class Carteira {
+        private final Guid id;
+        private final List<Parcela> parcelas;
 
-    public Carteira() {
-        this.id = Guid.randomUUID();
-        this.parcelas = new ArrayList<>();
-    }
-
-    // MÉTODO DE FÁBRICA: Encapsula a criação de parcelas pré-fixadas
-    public void contratarOperacaoPreFixada(BigDecimal valorTotal, int totalParcelas, LocalDate dataPrimeiroVencimento) {
-        if (!this.parcelas.isEmpty()) {
-            throw new IllegalStateException("Carteira já possui uma operação contratada.");
+        public Carteira() {
+            this.id = Guid.randomUUID();
+            this.parcelas = new ArrayList<>();
         }
-        BigDecimal valorParcela = valorTotal.divide(new BigDecimal(totalParcelas), 2, RoundingMode.HALF_UP);
-        for (int i = 1; i <= totalParcelas; i++) {
-            LocalDate vencimento = dataPrimeiroVencimento.plusMonths(i - 1);
-            this.parcelas.add(new ParcelaPreFixada(i, vencimento, valorParcela));
+
+        // MÉTODO DE FÁBRICA: Encapsula a criação de parcelas pré-fixadas
+        public void contratarOperacaoPreFixada(BigDecimal valorTotal, int totalParcelas, LocalDate dataPrimeiroVencimento) {
+            if (!this.parcelas.isEmpty()) {
+                throw new IllegalStateException("Carteira já possui uma operação contratada.");
+            }
+            BigDecimal valorParcela = valorTotal.divide(new BigDecimal(totalParcelas), 2, RoundingMode.HALF_UP);
+            for (int i = 1; i <= totalParcelas; i++) {
+                LocalDate vencimento = dataPrimeiroVencimento.plusMonths(i - 1);
+                this.parcelas.add(new ParcelaPreFixada(i, vencimento, valorParcela));
+            }
         }
-    }
-    
-    // MÉTODO DE FÁBRICA: Encapsula a criação de parcelas pós-fixadas
-    public void contratarOperacaoPosFixada(BigDecimal valorBase, int totalParcelas, IndiceCorrecao indice, LocalDate dataPrimeiroVencimento, ServicoIndiceEconomico servicoIndice) {
-        if (!this.parcelas.isEmpty()) {
-            throw new IllegalStateException("Carteira já possui uma operação contratada.");
+        
+        // MÉTODO DE FÁBRICA: Encapsula a criação de parcelas pós-fixadas
+        public void contratarOperacaoPosFixada(BigDecimal valorBase, int totalParcelas, IndiceCorrecao indice, LocalDate dataPrimeiroVencimento, ServicoIndiceEconomico servicoIndice) {
+            if (!this.parcelas.isEmpty()) {
+                throw new IllegalStateException("Carteira já possui uma operação contratada.");
+            }
+            for (int i = 1; i <= totalParcelas; i++) {
+                LocalDate vencimento = dataPrimeiroVencimento.plusMonths(i - 1);
+                this.parcelas.add(new ParcelaPosFixada(i, vencimento, valorBase, indice, servicoIndice));
+            }
         }
-        for (int i = 1; i <= totalParcelas; i++) {
-            LocalDate vencimento = dataPrimeiroVencimento.plusMonths(i - 1);
-            this.parcelas.add(new ParcelaPosFixada(i, vencimento, valorBase, indice, servicoIndice));
+
+        // *** O CORAÇÃO DO OCP NA PRÁTICA ***
+        // Este método funciona para QUALQUER tipo de parcela, hoje e no futuro.
+        // Ele está FECHADO para modificação. Não precisamos alterá-lo se um
+        // novo tipo de parcela (ex: ParcelaHibrida) for criado.
+        public BigDecimal getSaldoDevedorTotal(LocalDate dataCalculo) {
+            return this.parcelas.stream()
+                    .filter(p -> p.getStatus() == StatusParcela.ABERTA)
+                    .map(p -> p.getValorAtualizado(dataCalculo)) // Polimorfismo em ação!
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+        
+        public List<Parcela> getParcelas() {
+            return List.copyOf(this.parcelas); // Retorna cópia imutável
         }
     }
 
-    // *** O CORAÇÃO DO OCP NA PRÁTICA ***
-    // Este método funciona para QUALQUER tipo de parcela, hoje e no futuro.
-    // Ele está FECHADO para modificação. Não precisamos alterá-lo se um
-    // novo tipo de parcela (ex: ParcelaHibrida) for criado.
-    public BigDecimal getSaldoDevedorTotal(LocalDate dataCalculo) {
-        return this.parcelas.stream()
-                .filter(p -> p.getStatus() == StatusParcela.ABERTA)
-                .map(p -> p.getValorAtualizado(dataCalculo)) // Polimorfismo em ação!
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-    
-    public List<Parcela> getParcelas() {
-        return List.copyOf(this.parcelas); // Retorna cópia imutável
-    }
-}
+```
+
 Análise do Design e Conformidade com o OCP
 Fechada para Modificação: A classe Carteira é estável. Seu método principal, getSaldoDevedorTotal, não precisa ser alterado para suportar novos tipos de parcelamento. Ele delega o cálculo para os objetos Parcela, que são os especialistas.
 Aberta para Extensão: Se o negócio criar um "Parcelamento Híbrido", nós simplesmente criamos uma nova classe ParcelaHibrida extends Parcela, implementamos sua lógica de cálculo e adicionamos um novo método de fábrica na Carteira (contratarOperacaoHibrida(...)). O código existente e testado permanece intocado.
@@ -204,10 +216,12 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
   Criar IAmortizacaoStrategy: Uma interface que define o contrato para um algoritmo de amortização.
   Implementar Estratégias Concretas: Criaremos classes que implementam a interface para cada regra de negócio (JurosPrimeiroStrategy, PrincipalPrimeiroStrategy, etc.).
   Orquestrar na Carteira: A Carteira, como raiz do agregado, decidirá qual estratégia usar ao aplicar um pagamento.
-  1. Evoluindo a Parcela para ter Componentes
+
+ ## 1. Evoluindo a Parcela para ter Componentes
+
   Primeiro, tornamos explícito que uma parcela é composta por partes. Criaremos uma classe ComponenteFinanceiro.
   
-  Java
+ ```java
   
   // ComponenteFinanceiro.java
   import java.math.BigDecimal;
@@ -235,9 +249,12 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
   }
   
   enum TipoComponente { PRINCIPAL, JUROS, MULTA, TAXA; }
+
+  ```
+
   Agora, a classe Parcela (e suas filhas) conterá uma lista desses componentes. O método getValorAtualizado irá somar o saldo devedor de seus componentes.
   
-  Java
+ ```java
   
   // Parcela.java (Abstrata, agora com componentes)
   import java.math.BigDecimal;
@@ -278,108 +295,120 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
   
       // Getters...
   }
-  2. Definindo a Interface da Estratégia
+
+  ```
+
+  ## 2. Definindo a Interface da Estratégia
+
   Esta interface define o contrato para qualquer algoritmo de amortização.
   
-  Java
-  
-  // IAmortizacaoStrategy.java
-  import java.math.BigDecimal;
-  import java.util.List;
-  
-  public interface IAmortizacaoStrategy {
-      void aplicar(List<ComponenteFinanceiro> componentes, BigDecimal valorPago);
-  }
-  3. Implementando as Estratégias Concretas
+```java  
+    // IAmortizacaoStrategy.java
+    import java.math.BigDecimal;
+    import java.util.List;
+    
+    public interface IAmortizacaoStrategy {
+        void aplicar(List<ComponenteFinanceiro> componentes, BigDecimal valorPago);
+    }
+  ```
+  ## 3. Implementando as Estratégias Concretas
   Aqui está a beleza do padrão. Cada regra complexa é isolada em sua própria classe.
   
-  a) JurosPrimeiroStrategy
+  ### a) ParcialStrategy
   
   Primeiro quita juros e multa, depois o principal.
   
-  Java
+   
+```java 
   
-  // JurosPrimeiroStrategy.java
-  import java.math.BigDecimal;
-  import java.util.Comparator;
-  import java.util.List;
-  import java.util.Map;
-  import java.util.function.Function;
-  import java.util.stream.Collectors;
-  
-  public class JurosPrimeiroStrategy implements IAmortizacaoStrategy {
-      // Define a ordem de prioridade para pagamento
-      private static final List<TipoComponente> ORDEM_PAGAMENTO = 
-          List.of(TipoComponente.MULTA, TipoComponente.JUROS, TipoComponente.TAXA, TipoComponente.PRINCIPAL);
-  
-      @Override
-      public void aplicar(List<ComponenteFinanceiro> componentes, BigDecimal valorPago) {
-          BigDecimal valorRestante = valorPago;
-  
-          // Ordena os componentes pela prioridade definida
-          Map<TipoComponente, ComponenteFinanceiro> mapaComponentes = componentes.stream()
-              .collect(Collectors.toMap(ComponenteFinanceiro::getTipo, Function.identity()));
-  
-          for (TipoComponente tipo : ORDEM_PAGAMENTO) {
-              if (valorRestante.compareTo(BigDecimal.ZERO) <= 0) break;
-              
-              ComponenteFinanceiro componente = mapaComponentes.get(tipo);
-              if (componente != null) {
-                  valorRestante = componente.amortizar(valorRestante);
-              }
-          }
-      }
-  }
-  b) PrincipalPrimeiroStrategy
+    // ParcialStrategy.java
+    import java.math.BigDecimal;
+    import java.util.Comparator;
+    import java.util.List;
+    import java.util.Map;
+    import java.util.function.Function;
+    import java.util.stream.Collectors;
+    
+    public class ParcialStrategy implements IAmortizacaoStrategy {
+        // Define a ordem de prioridade para pagamento
+        private static final List<TipoComponente> ORDEM_PAGAMENTO = 
+            List.of(TipoComponente.MULTA, TipoComponente.JUROS, TipoComponente.TAXA, TipoComponente.PRINCIPAL);
+    
+        @Override
+        public void aplicar(List<ComponenteFinanceiro> componentes, BigDecimal valorPago) {
+            BigDecimal valorRestante = valorPago;
+    
+            // Ordena os componentes pela prioridade definida
+            Map<TipoComponente, ComponenteFinanceiro> mapaComponentes = componentes.stream()
+                .collect(Collectors.toMap(ComponenteFinanceiro::getTipo, Function.identity()));
+    
+            for (TipoComponente tipo : ORDEM_PAGAMENTO) {
+                if (valorRestante.compareTo(BigDecimal.ZERO) <= 0) break;
+                
+                ComponenteFinanceiro componente = mapaComponentes.get(tipo);
+                if (componente != null) {
+                    valorRestante = componente.amortizar(valorRestante);
+                }
+            }
+        }
+    }
+  ```
+  ### b) IntegralStrategy
   
   Implementação inversa.
   
-  Java
+  ```java 
   
-  // PrincipalPrimeiroStrategy.java
-  public class PrincipalPrimeiroStrategy implements IAmortizacaoStrategy {
-      private static final List<TipoComponente> ORDEM_PAGAMENTO = 
-          List.of(TipoComponente.PRINCIPAL, TipoComponente.JUROS, TipoComponente.MULTA, TipoComponente.TAXA);
-  
-      // A implementação do método aplicar() seria idêntica à anterior,
-      // apenas usando esta nova ORDEM_PAGAMENTO.
-      @Override
-      public void aplicar(List<ComponenteFinanceiro> componentes, BigDecimal valorPago) {
-          // ... lógica idêntica à JurosPrimeiroStrategy, mas com a ordem invertida ...
-      }
-  }
-  4. Orquestrando na Carteira
+    // IntegralStrategy.java
+    public class IntegralStrategy implements IAmortizacaoStrategy {
+        private static final List<TipoComponente> ORDEM_PAGAMENTO = 
+            List.of(TipoComponente.PRINCIPAL, TipoComponente.JUROS, TipoComponente.MULTA, TipoComponente.TAXA);
+    
+        // A implementação do método aplicar() seria idêntica à anterior,
+        // apenas usando esta nova ORDEM_PAGAMENTO.
+        @Override
+        public void aplicar(List<ComponenteFinanceiro> componentes, BigDecimal valorPago) {
+            // ... lógica idêntica à JurosPrimeiroStrategy, mas com a ordem invertida ...
+        }
+    }
+
+ ```
+ 
+ ## 4. Orquestrando na Carteira
   A Carteira agora tem a responsabilidade de conhecer a política do contrato e aplicar a estratégia correta.
   
-  Java
+   ```java 
   
-  // Carteira.java (trecho modificado)
-  public class Carteira {
-      // ... id, lista de parcelas ...
-      private final IAmortizacaoStrategy estrategiaDeAmortizacao; // A política do contrato!
-  
-      // O construtor agora define a política para toda a carteira
-      public Carteira(IAmortizacaoStrategy estrategiaDeAmortizacao) {
-          this.id = Guid.randomUUID();
-          this.parcelas = new ArrayList<>();
-          this.estrategiaDeAmortizacao = estrategiaDeAmortizacao;
-      }
-  
-      // Método de negócio que recebe um pagamento para uma parcela específica
-      public void receberPagamento(int numeroParcela, BigDecimal valorPago) {
-          Parcela parcelaAlvo = this.parcelas.stream()
-              .filter(p -> p.getNumero() == numeroParcela && p.getStatus() == StatusParcela.ABERTA)
-              .findFirst()
-              .orElseThrow(() -> new IllegalArgumentException("Parcela não encontrada ou já paga."));
-  
-          // A Carteira injeta a estratégia de amortização correta na Parcela.
-          parcelaAlvo.aplicarPagamento(valorPago, this.estrategiaDeAmortizacao);
-      }
-      
-      // Os métodos de fábrica (contratarOperacao...) agora criariam as parcelas
-      // com seus respectivos componentes de principal e juros.
-      // ...
-  }
+    // Carteira.java (trecho modificado)
+    public class Carteira {
+        // ... id, lista de parcelas ...
+        private final IAmortizacaoStrategy estrategiaDeAmortizacao; // A política do contrato!
+    
+        // O construtor agora define a política para toda a carteira
+        public Carteira(IAmortizacaoStrategy estrategiaDeAmortizacao) {
+            this.id = Guid.randomUUID();
+            this.parcelas = new ArrayList<>();
+            this.estrategiaDeAmortizacao = estrategiaDeAmortizacao;
+        }
+    
+        // Método de negócio que recebe um pagamento para uma parcela específica
+        public void receberPagamento(int numeroParcela, BigDecimal valorPago) {
+            Parcela parcelaAlvo = this.parcelas.stream()
+                .filter(p -> p.getNumero() == numeroParcela && p.getStatus() == StatusParcela.ABERTA)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Parcela não encontrada ou já paga."));
+    
+            // A Carteira injeta a estratégia de amortização correta na Parcela.
+            parcelaAlvo.aplicarPagamento(valorPago, this.estrategiaDeAmortizacao);
+        }
+        
+        // Os métodos de fábrica (contratarOperacao...) agora criariam as parcelas
+        // com seus respectivos componentes de principal e juros.
+        // ...
+    }
+
+  ```
+
   Conclusão e Próximos Passos
   Com este design, alcançamos um novo nível de flexibilidade:
   
@@ -406,166 +435,180 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
   1. A Ferramenta Fundamental: A Classe Resultado
   Primeiro, definimos nossa ferramenta genérica. Esta classe é o pilar do padrão.
   
-  Java
+  ```java 
   
-  // Resultado.java
-  import java.util.List;
-  import java.util.Optional;
-  import java.util.function.Consumer;
-  import java.util.function.Function;
-  
-  public final class Resultado<S, E> {
-      private final S sucesso;
-      private final E erro;
-  
-      private Resultado(S sucesso, E erro) {
-          this.sucesso = sucesso;
-          this.erro = erro;
-      }
-  
-      public static <S, E> Resultado<S, E> sucesso(S valor) {
-          return new Resultado<>(valor, null);
-      }
-  
-      public static <S, E> Resultado<S, E> erro(E erroInfo) {
-          return new Resultado<>(null, erroInfo);
-      }
-  
-      public boolean isSucesso() {
-          return sucesso != null;
-      }
-  
-      public boolean isErro() {
-          return erro != null;
-      }
-  
-      public Optional<S> getValor() {
-          return Optional.ofNullable(sucesso);
-      }
-  
-      public Optional<E> getErro() {
-          return Optional.ofNullable(erro);
-      }
-  
-      // Permite encadear operações no "trilho" do sucesso
-      public <R> Resultado<R, E> map(Function<S, R> mapper) {
-          if (isSucesso()) {
-              return Resultado.sucesso(mapper.apply(sucesso));
-          }
-          return Resultado.erro(erro);
-      }
-      
-      // Consumidores para tratar os dois casos, evitando if/else no código cliente
-      public Resultado<S, E> ifSucesso(Consumer<S> acao) {
-          if (isSucesso()) {
-              acao.accept(sucesso);
-          }
-          return this;
-      }
-  
-      public Resultado<S, E> ifErro(Consumer<E> acao) {
-          if (isErro()) {
-              acao.accept(erro);
-          }
-          return this;
-      }
-  }
+    // Resultado.java
+    import java.util.List;
+    import java.util.Optional;
+    import java.util.function.Consumer;
+    import java.util.function.Function;
+    
+    public final class Resultado<S, E> {
+        private final S sucesso;
+        private final E erro;
+    
+        private Resultado(S sucesso, E erro) {
+            this.sucesso = sucesso;
+            this.erro = erro;
+        }
+    
+        public static <S, E> Resultado<S, E> sucesso(S valor) {
+            return new Resultado<>(valor, null);
+        }
+    
+        public static <S, E> Resultado<S, E> erro(E erroInfo) {
+            return new Resultado<>(null, erroInfo);
+        }
+    
+        public boolean isSucesso() {
+            return sucesso != null;
+        }
+    
+        public boolean isErro() {
+            return erro != null;
+        }
+    
+        public Optional<S> getValor() {
+            return Optional.ofNullable(sucesso);
+        }
+    
+        public Optional<E> getErro() {
+            return Optional.ofNullable(erro);
+        }
+    
+        // Permite encadear operações no "trilho" do sucesso
+        public <R> Resultado<R, E> map(Function<S, R> mapper) {
+            if (isSucesso()) {
+                return Resultado.sucesso(mapper.apply(sucesso));
+            }
+            return Resultado.erro(erro);
+        }
+        
+        // Consumidores para tratar os dois casos, evitando if/else no código cliente
+        public Resultado<S, E> ifSucesso(Consumer<S> acao) {
+            if (isSucesso()) {
+                acao.accept(sucesso);
+            }
+            return this;
+        }
+    
+        public Resultado<S, E> ifErro(Consumer<E> acao) {
+            if (isErro()) {
+                acao.accept(erro);
+            }
+            return this;
+        }
+    }
+  ```
+```java 
   
   // Classe para carregar os detalhes do erro
   public record ErroDeValidacao(String mensagem, String campo) {}
-  2. Adicionando Validação aos Domínios
+
+  ```
+ ##  2. Adicionando Validação aos Domínios
+
   Agora, integramos o Resultado em nossas classes de domínio.
   
-  a) ComponenteFinanceiro
+ ### a) ComponenteFinanceiro
   
   Cada componente agora sabe como se validar.
   
   ```java
   
-  // ComponenteFinanceiro.java (evoluído)
-  public class ComponenteFinanceiro {
-      // ... atributos ...
+    // ComponenteFinanceiro.java (evoluído)
+    public class ComponenteFinanceiro {
+        // ... atributos ...
+    
+        public Resultado<ComponenteFinanceiro, ErroDeValidacao> validar() {
+            // Exemplo de regra de negócio: o valor original não pode ser negativo
+            if (this.valorOriginal.compareTo(BigDecimal.ZERO) < 0) {
+                return Resultado.erro(
+                    new ErroDeValidacao("Valor original não pode ser negativo.", "valorOriginal")
+                );
+            }
+            // Poderiam existir outras regras aqui...
+    
+            return Resultado.sucesso(this); // Sucesso, retorna a própria instância
+        }
+        // ... resto da classe ...
+    }
   
-      public Resultado<ComponenteFinanceiro, ErroDeValidacao> validar() {
-          // Exemplo de regra de negócio: o valor original não pode ser negativo
-          if (this.valorOriginal.compareTo(BigDecimal.ZERO) < 0) {
-              return Resultado.erro(
-                  new ErroDeValidacao("Valor original não pode ser negativo.", "valorOriginal")
-              );
-          }
-          // Poderiam existir outras regras aqui...
-  
-          return Resultado.sucesso(this); // Sucesso, retorna a própria instância
-      }
-      // ... resto da classe ...
-  }
-  b) Parcela
+  ```
+
+ ### b) Parcela
   
   A parcela é responsável por orquestrar a validação de todos os seus componentes e agregar os erros.
   
   ```java
   
-  // Parcela.java (evoluído)
-  public abstract class Parcela {
-      // ... atributos e métodos anteriores ...
-  
-      public Resultado<Parcela, List<ErroDeValidacao>> validarParaAmortizacao() {
-          List<ErroDeValidacao> erros = this.componentes.stream()
-                  .map(ComponenteFinanceiro::validar) // Valida cada componente
-                  .filter(Resultado::isErro)          // Filtra apenas os resultados de erro
-                  .flatMap(r -> r.getErro().stream())  // Extrai o ErroDeValidacao de dentro do Optional
-                  .collect(Collectors.toList());
-  
-          if (!erros.isEmpty()) {
-              // Se houver qualquer erro, retorna um resultado de erro com a lista completa
-              return Resultado.erro(erros);
-          }
-  
-          // Se tudo estiver OK, retorna um resultado de sucesso com a própria instância
-          return Resultado.sucesso(this);
-      }
-  }
-  3. Orquestração Final na Carteira
+    // Parcela.java (evoluído)
+    public abstract class Parcela {
+        // ... atributos e métodos anteriores ...
+    
+        public Resultado<Parcela, List<ErroDeValidacao>> validarParaAmortizacao() {
+            List<ErroDeValidacao> erros = this.componentes.stream()
+                    .map(ComponenteFinanceiro::validar) // Valida cada componente
+                    .filter(Resultado::isErro)          // Filtra apenas os resultados de erro
+                    .flatMap(r -> r.getErro().stream())  // Extrai o ErroDeValidacao de dentro do Optional
+                    .collect(Collectors.toList());
+    
+            if (!erros.isEmpty()) {
+                // Se houver qualquer erro, retorna um resultado de erro com a lista completa
+                return Resultado.erro(erros);
+            }
+    
+            // Se tudo estiver OK, retorna um resultado de sucesso com a própria instância
+            return Resultado.sucesso(this);
+        }
+    }
+
+ ```
+ ###  3. Orquestração Final na Carteira
+
   A Carteira agora usa este mecanismo para proteger a operação de amortização. O método receberPagamento se torna um exemplo claro de "Railway-Oriented Programming".
   
-  ```java
+```java
   
-  // Carteira.java (método receberPagamento final)
-  public class Carteira {
-      // ... atributos e construtor ...
+        // Carteira.java (método receberPagamento final)
+        public class Carteira {
+            // ... atributos e construtor ...
+        
+            public void receberPagamento(int numeroParcela, BigDecimal valorPago) {
+                Parcela parcelaAlvo = this.parcelas.stream()
+                    // ... lógica para encontrar a parcela ...
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("Parcela não encontrada. Este é um erro de aplicação, não de negócio."));
+        
+                // 1. CHAMA A VALIDAÇÃO: A operação retorna um Resultado
+                Resultado<Parcela, List<ErroDeValidacao>> resultadoValidacao = parcelaAlvo.validarParaAmortizacao();
+        
+                // 2. PROCESSA O RESULTADO: Sem if/else, usando os métodos do objeto Resultado
+                System.out.println("Tentando processar pagamento de R$" + valorPago + " para a parcela " + numeroParcela);
+                
+                resultadoValidacao
+                    .ifSucesso(parcelaValida -> {
+                        // --- TRILHO DO SUCESSO ---
+                        // Este código só executa se a validação passar.
+                        // A lógica de negócio principal fica isolada e limpa.
+                        System.out.println("Validação OK. Aplicando estratégia de amortização...");
+                        parcelaValida.aplicarPagamento(valorPago, this.estrategiaDeAmortizacao);
+                        System.out.println("Pagamento aplicado com sucesso. Novo saldo da parcela: " + parcelaValida.getValorAtualizado());
+                    })
+                    .ifErro(erros -> {
+                        // --- TRILHO DO ERRO ---
+                        // Este código só executa se a validação falhar.
+                        // O tratamento de erro fica isolado.
+                        System.err.println("ERRO: O pagamento não pôde ser processado. A parcela está em um estado inválido.");
+                        erros.forEach(erro -> 
+                            System.err.println("- Campo '" + erro.campo() + "': " + erro.mensagem())
+                        );
+                    });
+            }
+        }
   
-      public void receberPagamento(int numeroParcela, BigDecimal valorPago) {
-          Parcela parcelaAlvo = this.parcelas.stream()
-              // ... lógica para encontrar a parcela ...
-              .findFirst()
-              .orElseThrow(() -> new IllegalStateException("Parcela não encontrada. Este é um erro de aplicação, não de negócio."));
-  
-          // 1. CHAMA A VALIDAÇÃO: A operação retorna um Resultado
-          Resultado<Parcela, List<ErroDeValidacao>> resultadoValidacao = parcelaAlvo.validarParaAmortizacao();
-  
-          // 2. PROCESSA O RESULTADO: Sem if/else, usando os métodos do objeto Resultado
-          System.out.println("Tentando processar pagamento de R$" + valorPago + " para a parcela " + numeroParcela);
-          
-          resultadoValidacao
-              .ifSucesso(parcelaValida -> {
-                  // --- TRILHO DO SUCESSO ---
-                  // Este código só executa se a validação passar.
-                  // A lógica de negócio principal fica isolada e limpa.
-                  System.out.println("Validação OK. Aplicando estratégia de amortização...");
-                  parcelaValida.aplicarPagamento(valorPago, this.estrategiaDeAmortizacao);
-                  System.out.println("Pagamento aplicado com sucesso. Novo saldo da parcela: " + parcelaValida.getValorAtualizado());
-              })
-              .ifErro(erros -> {
-                  // --- TRILHO DO ERRO ---
-                  // Este código só executa se a validação falhar.
-                  // O tratamento de erro fica isolado.
-                  System.err.println("ERRO: O pagamento não pôde ser processado. A parcela está em um estado inválido.");
-                  erros.forEach(erro -> 
-                      System.err.println("- Campo '" + erro.campo() + "': " + erro.mensagem())
-                  );
-              });
-      }
-  }
+ ```
+
   Conclusão: Um Domínio mais Seguro e Explícito
   Ao adotar o padrão Resultado/Erro:
   
@@ -590,7 +633,7 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
   O Design Proposto: Um Framework de Validação Reutilizável
   A simples java.util.function.Predicate<T> retorna apenas true ou false. Precisamos de mais: em caso de falha, precisamos do ErroDeValidacao correspondente. Portanto, criaremos nossa própria abstração que combina a condição (o predicado) com o erro.
   
-  1. A Abstração Central: RegraDeValidacao
+  ## 1. A Abstração Central: RegraDeValidacao
   Esta classe encapsula uma única regra de negócio: a condição a ser testada e o erro a ser retornado em caso de falha.
   
   ```java
@@ -615,8 +658,9 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
       }
   }
 
+ ```
   
-  2. O Motor de Validação: A Classe Validador
+ ## 2. O Motor de Validação: A Classe Validador
   Esta classe genérica será nosso motor. Ela recebe uma lista de RegraDeValidacao e as aplica a um objeto, coletando todas as falhas.
   
  ```java
@@ -646,14 +690,17 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
           return Resultado.sucesso(objeto);
       }
   }
-  3. Refatorando o Domínio para Usar o Framework
+  
+ ```
+ ## 3. Refatorando o Domínio para Usar o Framework
+
   Agora, a parte mais elegante. Removemos a lógica de validação de dentro das nossas classes de domínio e passamos a definir as regras de forma declarativa.
   
-  a) Fábrica de Validadores para ComponenteFinanceiro
+###  a) Fábrica de Validadores para ComponenteFinanceiro
   
   Criamos uma classe separada cuja única responsabilidade é construir o validador para ComponenteFinanceiro. Aqui é onde as regras de negócio vivem agora.
   
-  Java
+```java
   
   // ComponenteFinanceiroValidadorFactory.java
   import java.math.BigDecimal;
@@ -685,11 +732,13 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
           return validador;
       }
   }
-  b) A Parcela Agora Delega a Validação
+  
+ ```
+###  b) A Parcela Agora Delega a Validação
   
   O método validarParaAmortizacao() na Parcela fica drasticamente mais simples e limpo. Ele não conhece mais os detalhes das regras; ele apenas orquestra a validação usando o motor que criamos.
   
-  Java
+```java
   
   // Parcela.java (método de validação refatorado)
   public abstract class Parcela {
@@ -715,6 +764,8 @@ Este design encapsula a complexidade onde ela pertence, promove alta coesão em 
       
       // ...
   }
+
+ ```
   Análise da Evolução e Conclusão
   Notem o que alcançamos:
   
@@ -742,7 +793,8 @@ Portanto, a estratégia não irá mais simplesmente modificar os componentes; el
 O Design Proposto: Eventos de Domínio como Resultado
 Faremos com que a operação de amortização retorne um objeto de valor imutável, nosso MemorialDeAmortizacao, que representa o resultado detalhado do evento.
 
-1. Os Objetos de Valor do Memorial (Os Dados)
+## 1. Os Objetos de Valor do Memorial (Os Dados)
+
 Primeiro, definimos as estruturas de dados que irão compor nosso memorial. São objetos imutáveis, perfeitos para DTOs ou Value Objects.
 
 ```java
@@ -777,133 +829,145 @@ public record MemorialDeAmortizacao(
     List<DetalheAplicacaoComponente> detalhesPorComponente,
     BigDecimal totalAmortizado,
     BigDecimal valorNaoUtilizado // Troco
-) {} ````
-2. Evoluindo a IAmortizacaoStrategy para Relatar o que Fez
+) {}
+
+```
+## 2. Evoluindo a IAmortizacaoStrategy para Relatar o que Fez
+
 A mudança principal é no contrato da estratégia. Em vez de retornar void, ela retornará o MemorialDeAmortizacao.
 
-Java
+```java
 
-// IAmortizacaoStrategy.java (interface modificada)
-public interface IAmortizacaoStrategy {
-    /**
-     * Aplica o pagamento aos componentes e retorna um memorial detalhado da operação.
-     */
-    MemorialDeAmortizacao aplicar(List<ComponenteFinanceiro> componentes, BigDecimal valorPago);
-}
+    // IAmortizacaoStrategy.java (interface modificada)
+    public interface IAmortizacaoStrategy {
+        /**
+         * Aplica o pagamento aos componentes e retorna um memorial detalhado da operação.
+         */
+        MemorialDeAmortizacao aplicar(List<ComponenteFinanceiro> componentes, BigDecimal valorPago);
+    }
+
+```
 Agora, a implementação da estratégia se torna responsável por construir este relatório.
 
 ```java
 
-// JurosPrimeiroStrategy.java (implementação modificada)
-public class JurosPrimeiroStrategy implements IAmortizacaoStrategy {
-    private static final List<TipoComponente> ORDEM_PAGAMENTO = /* ... */;
+    // JurosPrimeiroStrategy.java (implementação modificada)
+    public class JurosPrimeiroStrategy implements IAmortizacaoStrategy {
+        private static final List<TipoComponente> ORDEM_PAGAMENTO = /* ... */;
 
-    @Override
-    public MemorialDeAmortizacao aplicar(List<ComponenteFinanceiro> componentes, BigDecimal valorPago) {
-        BigDecimal valorRestante = valorPago;
-        List<DetalheAplicacaoComponente> detalhes = new ArrayList<>();
-        
-        // ... Lógica para ordenar os componentes ...
-
-        for (TipoComponente tipo : ORDEM_PAGAMENTO) {
-            ComponenteFinanceiro componente = //... encontra o componente
-            if (componente == null) continue;
-
-            BigDecimal saldoAnterior = componente.getSaldoDevedor();
-            if (saldoAnterior.compareTo(BigDecimal.ZERO) == 0) continue; // Pula se já está zerado
-
-            // Amortiza e captura o valor que não foi usado
-            BigDecimal valorNaoUtilizadoNaEtapa = componente.amortizar(valorRestante);
+        @Override
+        public MemorialDeAmortizacao aplicar(List<ComponenteFinanceiro> componentes, BigDecimal valorPago) {
+            BigDecimal valorRestante = valorPago;
+            List<DetalheAplicacaoComponente> detalhes = new ArrayList<>();
             
-            BigDecimal saldoNovo = componente.getSaldoDevedor();
-            BigDecimal valorAplicado = saldoAnterior.subtract(saldoNovo);
+            // ... Lógica para ordenar os componentes ...
 
-            if (valorAplicado.compareTo(BigDecimal.ZERO) > 0) {
-                detalhes.add(new DetalheAplicacaoComponente(tipo, saldoAnterior, valorAplicado, saldoNovo));
+            for (TipoComponente tipo : ORDEM_PAGAMENTO) {
+                ComponenteFinanceiro componente = //... encontra o componente
+                if (componente == null) continue;
+
+                BigDecimal saldoAnterior = componente.getSaldoDevedor();
+                if (saldoAnterior.compareTo(BigDecimal.ZERO) == 0) continue; // Pula se já está zerado
+
+                // Amortiza e captura o valor que não foi usado
+                BigDecimal valorNaoUtilizadoNaEtapa = componente.amortizar(valorRestante);
+                
+                BigDecimal saldoNovo = componente.getSaldoDevedor();
+                BigDecimal valorAplicado = saldoAnterior.subtract(saldoNovo);
+
+                if (valorAplicado.compareTo(BigDecimal.ZERO) > 0) {
+                    detalhes.add(new DetalheAplicacaoComponente(tipo, saldoAnterior, valorAplicado, saldoNovo));
+                }
+                valorRestante = valorNaoUtilizadoNaEtapa;
             }
-            valorRestante = valorNaoUtilizadoNaEtapa;
+
+            BigDecimal totalAmortizado = valorPago.subtract(valorRestante);
+
+            return new MemorialDeAmortizacao(
+                UUID.randomUUID(),
+                OffsetDateTime.now(),
+                valorPago,
+                this.getClass().getSimpleName(), // Nome da estratégia usada
+                detalhes,
+                totalAmortizado,
+                valorRestante // O troco
+            );
         }
-
-        BigDecimal totalAmortizado = valorPago.subtract(valorRestante);
-
-        return new MemorialDeAmortizacao(
-            UUID.randomUUID(),
-            OffsetDateTime.now(),
-            valorPago,
-            this.getClass().getSimpleName(), // Nome da estratégia usada
-            detalhes,
-            totalAmortizado,
-            valorRestante // O troco
-        );
     }
-}
-3. Propagando o Memorial pela Pilha de Chamadas
+```
+
+## 3. Propagando o Memorial pela Pilha de Chamadas
+
 As classes de domínio agora simplesmente repassam o memorial para o chamador.
 
 ```java
-
-// Parcela.java (método aplicarPagamento modificado)
-public abstract class Parcela {
-    // ...
-    public MemorialDeAmortizacao aplicarPagamento(BigDecimal valorPago, IAmortizacaoStrategy estrategia) {
-        MemorialDeAmortizacao memorial = estrategia.aplicar(this.componentes, valorPago);
-        
-        if (getValorAtualizado().compareTo(BigDecimal.ZERO) == 0) {
-            this.status = StatusParcela.PAGA;
+    // Parcela.java (método aplicarPagamento modificado)
+    public abstract class Parcela {
+        // ...
+        public MemorialDeAmortizacao aplicarPagamento(BigDecimal valorPago, IAmortizacaoStrategy estrategia) {
+            MemorialDeAmortizacao memorial = estrategia.aplicar(this.componentes, valorPago);
+            
+            if (getValorAtualizado().compareTo(BigDecimal.ZERO) == 0) {
+                this.status = StatusParcela.PAGA;
+            }
+            return memorial; // Retorna o memorial para o chamador
         }
-        return memorial; // Retorna o memorial para o chamador
+        // ...
     }
-    // ...
-} ```
-4. O Resultado Final na Carteira (A Combinação Perfeita)
+```
+## 4. O Resultado Final na Carteira (A Combinação Perfeita)
 A Carteira agora tem um método receberPagamento que retorna o resultado final da operação: ou uma lista de erros de validação, ou o memorial de sucesso. O nosso objeto Resultado brilha aqui.
 
 ```java
 
-// Carteira.java (método receberPagamento modificado)
-public class Carteira {
-    // ...
-    public Resultado<MemorialDeAmortizacao, List<ErroDeValidacao>> receberPagamento(int numeroParcela, BigDecimal valorPago) {
-        Parcela parcelaAlvo = //... encontra a parcela ou lança exceção
+    // Carteira.java (método receberPagamento modificado)
+    public class Carteira {
+        // ...
+        public Resultado<MemorialDeAmortizacao, List<ErroDeValidacao>> receberPagamento(int numeroParcela, BigDecimal valorPago) {
+            Parcela parcelaAlvo = //... encontra a parcela ou lança exceção
 
-        // A mágica da programação funcional e do nosso design:
-        // 1. Valida a parcela.
-        // 2. Se a validação for bem-sucedida, o `.map()` aplica a função seguinte.
-        // 3. A função interna aplica o pagamento, que retorna o Memorial.
-        // 4. O `.map()` encapsula o Memorial em um `Resultado.sucesso()`.
-        // 5. Se a validação falhar, o `.map()` é ignorado e o resultado de erro original é retornado.
-        return parcelaAlvo.validarParaAmortizacao()
-            .map(parcelaValida -> parcelaValida.aplicarPagamento(valorPago, this.estrategiaDeAmortizacao));
-    }
-} ```
+            // A mágica da programação funcional e do nosso design:
+            // 1. Valida a parcela.
+            // 2. Se a validação for bem-sucedida, o `.map()` aplica a função seguinte.
+            // 3. A função interna aplica o pagamento, que retorna o Memorial.
+            // 4. O `.map()` encapsula o Memorial em um `Resultado.sucesso()`.
+            // 5. Se a validação falhar, o `.map()` é ignorado e o resultado de erro original é retornado.
+            return parcelaAlvo.validarParaAmortizacao()
+                .map(parcelaValida -> parcelaValida.aplicarPagamento(valorPago, this.estrategiaDeAmortizacao));
+        }
+    } 
+
+```
 Como o Serviço de Aplicação usaria isso:
 
 ```java
 
-// Exemplo no Application Service
-Carteira minhaCarteira = //...
-Resultado<MemorialDeAmortizacao, List<ErroDeValidacao>> resultado = 
-    minhaCarteira.receberPagamento(1, new BigDecimal("150.00"));
+    // Exemplo no Application Service
+    Carteira minhaCarteira = //...
+    Resultado<MemorialDeAmortizacao, List<ErroDeValidacao>> resultado = 
+        minhaCarteira.receberPagamento(1, new BigDecimal("150.00"));
 
-resultado.ifSucesso(memorial -> {
-    System.out.println("=== Memorial de Amortização ===");
-    System.out.println("ID Transação: " + memorial.idTransacao());
-    System.out.println("Estratégia: " + memorial.nomeEstrategiaUsada());
-    memorial.detalhesPorComponente().forEach(detalhe -> {
-        System.out.println(
-            "  - Componente: " + detalhe.tipo() +
-            " | Saldo Anterior: " + detalhe.saldoAnterior() +
-            " | Valor Aplicado: " + detalhe.valorAplicado() +
-            " | Saldo Novo: " + detalhe.saldoNovo()
-        );
+    resultado.ifSucesso(memorial -> {
+        System.out.println("=== Memorial de Amortização ===");
+        System.out.println("ID Transação: " + memorial.idTransacao());
+        System.out.println("Estratégia: " + memorial.nomeEstrategiaUsada());
+        memorial.detalhesPorComponente().forEach(detalhe -> {
+            System.out.println(
+                "  - Componente: " + detalhe.tipo() +
+                " | Saldo Anterior: " + detalhe.saldoAnterior() +
+                " | Valor Aplicado: " + detalhe.valorAplicado() +
+                " | Saldo Novo: " + detalhe.saldoNovo()
+            );
+        });
+        System.out.println("Total Amortizado: " + memorial.totalAmortizado());
+        // Aqui, o memorial poderia ser salvo no banco, enviado para uma fila, etc.
+
+    }).ifErro(erros -> {
+        System.err.println("Pagamento falhou na validação.");
+        // ... loga os erros
     });
-    System.out.println("Total Amortizado: " + memorial.totalAmortizado());
-    // Aqui, o memorial poderia ser salvo no banco, enviado para uma fila, etc.
 
-}).ifErro(erros -> {
-    System.err.println("Pagamento falhou na validação.");
-    // ... loga os erros
-}); ```
+```
 Conclusão
 Este design final alcança todos os nossos objetivos. A responsabilidade de criar o memorial está precisamente onde deveria estar: na Strategy. Nossas entidades de domínio (Parcela, Carteira) permanecem limpas, focadas em suas responsabilidades principais. O fluxo de dados é explícito, imutável e seguro.
 

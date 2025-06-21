@@ -904,7 +904,7 @@ resultado.ifSucesso(memorial -> {
 }).ifErro(erros -> {
     System.err.println("Pagamento falhou na validação.");
     // ... loga os erros
-});
+}); ```
 Conclusão
 Este design final alcança todos os nossos objetivos. A responsabilidade de criar o memorial está precisamente onde deveria estar: na Strategy. Nossas entidades de domínio (Parcela, Carteira) permanecem limpas, focadas em suas responsabilidades principais. O fluxo de dados é explícito, imutável e seguro.
 
